@@ -1,0 +1,309 @@
+function weeklyCount(pages, fieldName) {
+    const today = moment().startOf("day")
+    const weekStart = today.clone().startOf("isoWeek")
+    const weekEnd = today.clone().endOf("isoWeek")
+
+    return pages
+        .where(p => p[fieldName] === true)
+        .map(p => moment(p.file.name, "YYYY-MM-DD"))
+        .filter(d => d.isValid() && d.isBetween(weekStart, weekEnd, null, "[]"))
+        .length
+}
+
+function calculateStreak(pages, fieldName) {
+    const today = moment().startOf("day")
+    
+    // Get all dates where the activity was completed
+    const completedDates = pages
+        .where(p => p[fieldName] === true)
+        .map(p => moment(p.file.name, "YYYY-MM-DD"))
+        .filter(d => d.isValid() && d.isSameOrBefore(today))
+        .array() // Convert to plain array
+        .sort((a, b) => b.diff(a)) // Sort descending (most recent first)
+    
+    if (completedDates.length === 0) return 0
+    
+    // Get the most recent completion date
+    const mostRecent = completedDates[0]
+    
+    // If the most recent completion is more than 2 days ago, streak is 0
+    const daysSinceLastCompletion = today.diff(mostRecent, 'days')
+    if (daysSinceLastCompletion > 2) {
+        return 0
+    }
+    
+    // Count total completed dates, checking for gaps of 3+ days
+    let streak = 0
+    
+    for (let i = 0; i < completedDates.length; i++) {
+        const currentDate = completedDates[i]
+        
+        // Count this completion
+        streak++
+        
+        // Check gap to next completion (if there is one)
+        if (i < completedDates.length - 1) {
+            const nextDate = completedDates[i + 1]
+            const daysBetween = currentDate.diff(nextDate, 'days') - 1 // Gap days between completions
+            
+            // If gap is more than 2 days, break the streak
+            if (daysBetween > 2) {
+                break
+            }
+        }
+    }
+    
+    return streak
+}
+
+// ---------- CONFIG ----------
+const today = moment()
+const dayOfWeek = today.isoWeekday()
+
+// ---------- DATA ----------
+const items = [
+    { icon: "💪", label: "Workout", pages: '"02 Workout"', field: "Workout", target: 6 },
+    { icon: "🚴‍♂️", label: "Cardio", pages: '"05 Cycling"', field: "Cardio", target: 4 },
+    { icon: "✓", label: "NoFap", pages: '"01 Daily Journal"', field: "MasturbationAvoided", target: 7 },
+    { icon: "💊", label: "Medicine", pages: '"01 Daily Journal"', field: "Medicine", target: 7 },
+    { icon: "🏋️‍♂️", label: "GTG", pages: '"01 Daily Journal"', field: "GTG", target: 6 },
+    { icon: "🪴", label: "Water Plants", pages: '"01 Daily Journal"', field: "waterPlants", target: 7 },
+    { icon: "📑", label: "Research", pages: '"01 Daily Journal"', field: "Research", target: 1 },
+    { icon: "📄", label: "AcaResearch", pages: '"01 Daily Journal"', field: "AcaResearch", target: 6 },
+    { icon: "📖", label: "Reading", pages: '"06 Readings"', field: "Reading", target: 6 },
+    { icon: "📚", label: "Study", pages: '"01 Daily Journal"', field: "Study", target: 6 },
+    { icon: "🎸", label: "Guitar", pages: '"03 Guitar Practice"', field: "Guitar", target: 6 },
+    { icon: "🐍", label: "Python", pages: '"04 Learning Python"', field: "Python", target: 6 },
+    { icon: "🏎️", label: "Gaming", pages: '"01 Daily Journal"', field: "Gaming", target: 7 },
+    { icon: "🖥️", label: "Journal", pages: '"01 Daily Journal"', field: "DJournal", target: 7 }
+]
+
+// Calculate progress and streak for each item
+const data = items.map(item => {
+    const pages = dv.pages(item.pages)
+    const done = weeklyCount(pages, item.field)
+    const streak = calculateStreak(pages, item.field)
+    const progress = Math.min(done / item.target, 1)
+    return {
+        ...item,
+        done,
+        streak,
+        progress
+    }
+})
+
+// ---------- RENDER ----------
+const container = dv.el("div", "", {
+    attr: {
+        style: `
+        padding: 40px 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        `
+    }
+})
+
+// Header
+const header = dv.el("div", "", {
+    attr: {
+        style: `
+        text-align: center;
+        margin-bottom: 40px;
+        `
+    }
+})
+
+header.appendChild(
+    dv.el("div", "Weekly Radar", {
+        attr: {
+            style: `
+            font-size: 1.3em;
+            font-weight: 300;
+            color: var(--text-muted);
+            letter-spacing: 0.12em;
+            margin-bottom: 4px;
+            `
+        }
+    })
+)
+
+header.appendChild(
+    dv.el("div", `week ${today.isoWeek()}`, {
+        attr: {
+            style: `
+            font-size: 0.8em;
+            color: var(--text-faint);
+            letter-spacing: 0.08em;
+            `
+        }
+    })
+)
+
+container.appendChild(header)
+
+// Canvas for radar chart
+const canvas = document.createElement("canvas")
+canvas.width = 600
+canvas.height = 600
+canvas.style.maxWidth = "100%"
+canvas.style.height = "auto"
+
+const ctx = canvas.getContext("2d")
+const centerX = 300
+const centerY = 300
+const maxRadius = 220
+const numItems = data.length
+
+// Draw background circles
+ctx.strokeStyle = "rgba(128, 128, 128, 0.1)"
+ctx.lineWidth = 1
+for (let i = 1; i <= 5; i++) {
+    ctx.beginPath()
+    ctx.arc(centerX, centerY, (maxRadius / 5) * i, 0, Math.PI * 2)
+    ctx.stroke()
+}
+
+// Draw axes
+ctx.strokeStyle = "rgba(128, 128, 128, 0.15)"
+ctx.lineWidth = 1
+for (let i = 0; i < numItems; i++) {
+    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+    const x = centerX + Math.cos(angle) * maxRadius
+    const y = centerY + Math.sin(angle) * maxRadius
+    
+    ctx.beginPath()
+    ctx.moveTo(centerX, centerY)
+    ctx.lineTo(x, y)
+    ctx.stroke()
+}
+
+// Draw progress polygon
+ctx.fillStyle = "rgba(99, 102, 241, 0.15)"
+ctx.strokeStyle = "rgba(99, 102, 241, 0.8)"
+ctx.lineWidth = 2.5
+
+ctx.beginPath()
+for (let i = 0; i < numItems; i++) {
+    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+    const radius = maxRadius * data[i].progress
+    const x = centerX + Math.cos(angle) * radius
+    const y = centerY + Math.sin(angle) * radius
+    
+    if (i === 0) {
+        ctx.moveTo(x, y)
+    } else {
+        ctx.lineTo(x, y)
+    }
+}
+ctx.closePath()
+ctx.fill()
+ctx.stroke()
+
+// Draw points on progress line
+for (let i = 0; i < numItems; i++) {
+    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+    const radius = maxRadius * data[i].progress
+    const x = centerX + Math.cos(angle) * radius
+    const y = centerY + Math.sin(angle) * radius
+    
+    ctx.fillStyle = data[i].progress >= 1 ? "#10b981" : 
+                    data[i].progress >= 0.7 ? "#f59e0b" : "#ef4444"
+    ctx.beginPath()
+    ctx.arc(x, y, 5, 0, Math.PI * 2)
+    ctx.fill()
+}
+
+// Draw labels
+ctx.font = "14px system-ui, -apple-system, sans-serif"
+ctx.textAlign = "center"
+ctx.textBaseline = "middle"
+
+for (let i = 0; i < numItems; i++) {
+    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+    const labelRadius = maxRadius + 40
+    const x = centerX + Math.cos(angle) * labelRadius
+    const y = centerY + Math.sin(angle) * labelRadius
+    
+    // Draw emoji
+    ctx.font = "20px system-ui, -apple-system, sans-serif"
+    ctx.fillStyle = "rgba(255, 255, 255, 0.9)"
+    ctx.fillText(data[i].icon, x, y - 20)
+    
+    // Draw streak (right next to emoji)
+    ctx.font = "bold 11px system-ui, -apple-system, sans-serif"
+    const streakColor = data[i].streak >= 7 ? "#10b981" : 
+                        data[i].streak >= 3 ? "#f59e0b" : "#ef4444"
+    ctx.fillStyle = streakColor
+    ctx.fillText(`${data[i].streak}🔥`, x, y - 3)
+    
+    // Draw label
+    ctx.font = "11px system-ui, -apple-system, sans-serif"
+    ctx.fillStyle = "rgba(150, 150, 150, 0.8)"
+    ctx.fillText(data[i].label, x, y + 11)
+    
+    // Draw progress fraction
+    ctx.font = "10px system-ui, -apple-system, sans-serif"
+    ctx.fillStyle = "rgba(120, 120, 120, 0.7)"
+    ctx.fillText(`${data[i].done}/${data[i].target}`, x, y + 24)
+}
+
+container.appendChild(canvas)
+
+// Legend
+const legend = dv.el("div", "", {
+    attr: {
+        style: `
+        margin-top: 30px;
+        display: flex;
+        gap: 24px;
+        justify-content: center;
+        font-size: 0.85em;
+        `
+    }
+})
+
+const legendItems = [
+    { color: "#10b981", label: "Complete" },
+    { color: "#f59e0b", label: "Partial" },
+    { color: "#ef4444", label: "Behind" }
+]
+
+legendItems.forEach(item => {
+    const legendItem = dv.el("div", "", {
+        attr: {
+            style: `
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            `
+        }
+    })
+    
+    legendItem.appendChild(
+        dv.el("div", "", {
+            attr: {
+                style: `
+                width: 12px;
+                height: 12px;
+                border-radius: 50%;
+                background: ${item.color};
+                `
+            }
+        })
+    )
+    
+    legendItem.appendChild(
+        dv.el("span", item.label, {
+            attr: {
+                style: `
+                color: var(--text-muted);
+                `
+            }
+        })
+    )
+    
+    legend.appendChild(legendItem)
+})
+
+container.appendChild(legend)
