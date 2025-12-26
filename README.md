@@ -1,7 +1,7 @@
 # Weekly Radar
 
-![preview](preview/preview_1.png)
-![preview-2](preview/preview_2.png)
+![preview](preview_1.png)
+![preview-2](preview_2.png)
 
 Weekly radar is a spider chart to track your activities for a week (Monday to Sunday). I will keep it short.
 
