@@ -29,6 +29,12 @@ I have attached the `dataviewjs` source code. Simply paste the code starting wit
 
 ## Changelog
 
+- **1.1.2**
+
+You can set numeric values in your properties. And set the `type` in the source code to `numeric` for it accept numeric values from your notes. Rest stays the same.
+
+Other global values can also be changed like `MAX_STREAK_GAP` for maximum gap allowed between completions, `CANVAS_SIZE` to set your canvas size, `RADAR_MAX_RADIUS` to set a maximum radius of your radar, `STREAK_THRESHOLDS` for setting when the color of the points change, and finally `PROGRESS_THRESHOLDS` for differentiation between `complete` and `partial`.
+
 - **1.1.1**
 
 You can now set a global `journalFormat` as per your preference. It can be `YYYY-MM-DD` (which is the default) or `DD-MM-YY` as some people might prefer to store their notes.

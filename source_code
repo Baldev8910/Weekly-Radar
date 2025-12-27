@@ -14,7 +14,7 @@ const STREAK_THRESHOLDS = {
 // Progress color thresholds
 const PROGRESS_THRESHOLDS = {
     complete: 1,
-    partial: 0.7
+    partial: 0.5
 };
 
 // Color palette
