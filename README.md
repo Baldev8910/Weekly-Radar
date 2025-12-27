@@ -41,4 +41,5 @@ You can now set a global `journalFormat` as per your preference. It can be `YYYY
 
 ## Version
 
+- 1.1.2 - 27 December 2025
 - 1.1.1 - 27 December 2025
