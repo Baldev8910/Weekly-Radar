@@ -32,3 +32,7 @@ I have attached the `dataviewjs` source code. Simply paste the code starting wit
 - **1.1.1**
 
 You can now set a global `journalFormat` as per your preference. It can be `YYYY-MM-DD` (which is the default) or `DD-MM-YY` as some people might prefer to store their notes.
+
+## Version
+
+
