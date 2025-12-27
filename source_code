@@ -27,23 +27,39 @@ const COLORS = {
 };
 
 // ---------- FUNCTIONS ----------
-function weeklyCount(pages, fieldName) {
+function weeklyCount(pages, fieldName, isNumeric = false) {
     const today = moment().startOf("day")
     const weekStart = today.clone().startOf("isoWeek")
     const weekEnd = today.clone().endOf("isoWeek")
 
-    return pages
-        .where(p => p[fieldName] === true)
-        .map(p => moment(p.file.name, journalFormat))
-        .filter(d => d.isValid() && d.isBetween(weekStart, weekEnd, null, "[]"))
-        .length
+    const validEntries = pages
+        .where(p => p[fieldName] !== null && p[fieldName] !== undefined)
+        .map(p => ({
+            date: moment(p.file.name, journalFormat),
+            value: p[fieldName]
+        }))
+        .filter(entry => entry.date.isValid() && entry.date.isBetween(weekStart, weekEnd, null, "[]"))
+        .array()
+    
+    if (isNumeric) {
+        return validEntries.reduce((sum, entry) => sum + (Number(entry.value) || 0), 0)
+    } else {
+        return validEntries.filter(entry => entry.value === true).length
+    }
 }
 
-function calculateStreak(pages, fieldName) {
+function calculateStreak(pages, fieldName, isNumeric = false) {
     const today = moment().startOf("day")
     
     const completedDates = pages
-        .where(p => p[fieldName] === true)
+        .where(p => {
+            const value = p[fieldName]
+            if (isNumeric) {
+                return value !== null && value !== undefined && Number(value) > 0
+            } else {
+                return value === true
+            }
+        })
         .map(p => moment(p.file.name, journalFormat))
         .filter(d => d.isValid() && d.isSameOrBefore(today))
         .array()
@@ -81,32 +97,33 @@ function calculateStreak(pages, fieldName) {
 const today = moment()
 const dayOfWeek = today.isoWeekday()
 
-// ---------- DATA ----------
 const items = [
-    { icon: "💪", label: "Workout", pages: '"02 Workout"', field: "Workout", target: 6 },
-    { icon: "🚴‍♂️", label: "Cardio", pages: '"05 Cycling"', field: "Cardio", target: 4 },
-    { icon: "✓", label: "NoFap", pages: '"01 Daily Journal"', field: "MasturbationAvoided", target: 7 },
-    { icon: "💊", label: "Medicine", pages: '"01 Daily Journal"', field: "Medicine", target: 7 },
-    { icon: "🏋️‍♂️", label: "GTG", pages: '"01 Daily Journal"', field: "GTG", target: 6 },
-    { icon: "🪴", label: "Water Plants", pages: '"01 Daily Journal"', field: "waterPlants", target: 7 },
-    { icon: "📑", label: "Research", pages: '"01 Daily Journal"', field: "Research", target: 1 },
-    { icon: "📄", label: "AcaResearch", pages: '"01 Daily Journal"', field: "AcaResearch", target: 6 },
-    { icon: "📖", label: "Reading", pages: '"06 Readings"', field: "Reading", target: 6 },
-    { icon: "📚", label: "Study", pages: '"01 Daily Journal"', field: "Study", target: 6 },
-    { icon: "🎸", label: "Guitar", pages: '"03 Guitar Practice"', field: "Guitar", target: 6 },
-    { icon: "🐍", label: "Python", pages: '"04 Learning Python"', field: "Python", target: 6 },
-    { icon: "🏎️", label: "Gaming", pages: '"01 Daily Journal"', field: "Gaming", target: 7 },
-    { icon: "🖥️", label: "Journal", pages: '"01 Daily Journal"', field: "DJournal", target: 7 }
+    { icon: "💪", label: "Workout", pages: '"02 Workout"', field: "Workout", target: 6, type: "boolean" },
+    { icon: "🚴‍♂️", label: "Cardio", pages: '"05 Cycling"', field: "Cardio", target: 4, type: "boolean" },
+    { icon: "✓", label: "NoFap", pages: '"01 Daily Journal"', field: "MasturbationAvoided", target: 7, type: "boolean" },
+    { icon: "💊", label: "Medicine", pages: '"01 Daily Journal"', field: "Medicine", target: 7, type: "boolean" },
+    { icon: "🏋️‍♂️", label: "GTG", pages: '"01 Daily Journal"', field: "GTG", target: 6, type: "boolean" },
+    { icon: "🪴", label: "Water Plants", pages: '"01 Daily Journal"', field: "waterPlants", target: 7, type: "boolean" },
+    { icon: "📑", label: "Research", pages: '"01 Daily Journal"', field: "Research", target: 1, type: "boolean" },
+    { icon: "📄", label: "AcaResearch", pages: '"01 Daily Journal"', field: "AcaResearch", target: 6, type: "boolean" },
+    { icon: "📖", label: "Reading", pages: '"06 Readings"', field: "Reading", target: 6, type: "boolean" },
+    { icon: "📚", label: "Study", pages: '"01 Daily Journal"', field: "Study", target: 6, type: "boolean" },
+    { icon: "🎸", label: "Guitar", pages: '"03 Guitar Practice"', field: "Guitar", target: 6, type: "boolean" },
+    { icon: "🐍", label: "Python", pages: '"04 Learning Python"', field: "Python", target: 6, type: "boolean" },
+    { icon: "🏎️", label: "Gaming", pages: '"01 Daily Journal"', field: "Gaming", target: 7, type: "boolean" },
+    { icon: "🖥️", label: "Journal", pages: '"01 Daily Journal"', field: "DJournal", target: 7, type: "boolean" },
+    { icon: "💵", label: "Money", pages: '"01 Daily Journal"', field: "moneySpent", target: 1000, type: "numeric" }
 ]
 
 const data = items.map(item => {
     const pages = dv.pages(item.pages)
-    const done = weeklyCount(pages, item.field)
-    const streak = calculateStreak(pages, item.field)
+    const isNumeric = item.type === "numeric"
+    const done = weeklyCount(pages, item.field, isNumeric)
+    const streak = calculateStreak(pages, item.field, isNumeric)
     const progress = Math.min(done / item.target, 1)
     return {
         ...item,
-        done,
+        done: isNumeric ? Math.round(done * 10) / 10 : done,
         streak,
         progress
     }
