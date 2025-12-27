@@ -26,3 +26,9 @@ You can change the background circles style and color in `// Draw background cir
 I have attached the `dataviewjs` source code. Simply paste the code starting with ` ```dataviewjs ` and end with ` ``` `. Then, you can start customizing.
 
 **Dataview** plugin is required to run this code in Obsidian.
+
+## Changelog
+
+- **1.1.1**
+
+You can now set a global `journalFormat` as per your preference. It can be `YYYY-MM-DD` (which is the default) or `DD-MM-YY` as some people might prefer to store their notes.
