@@ -1,3 +1,32 @@
+// ---------- GLOBAL CONSTANTS ----------
+const journalFormat = "YYYY-MM-DD";
+const MAX_STREAK_GAP = 2; // Maximum days gap allowed between completions
+const CANVAS_SIZE = 600;
+const RADAR_MAX_RADIUS = 220;
+const LABEL_OFFSET = 40;
+
+// Streak color thresholds
+const STREAK_THRESHOLDS = {
+    excellent: 7,
+    good: 3
+};
+
+// Progress color thresholds
+const PROGRESS_THRESHOLDS = {
+    complete: 1,
+    partial: 0.7
+};
+
+// Color palette
+const COLORS = {
+    complete: "#10b981",
+    partial: "#f59e0b",
+    behind: "#ef4444",
+    radarFill: "rgba(99, 102, 241, 0.15)",
+    radarStroke: "rgba(99, 102, 241, 0.8)"
+};
+
+// ---------- FUNCTIONS ----------
 function weeklyCount(pages, fieldName) {
     const today = moment().startOf("day")
     const weekStart = today.clone().startOf("isoWeek")
@@ -5,7 +34,7 @@ function weeklyCount(pages, fieldName) {
 
     return pages
         .where(p => p[fieldName] === true)
-        .map(p => moment(p.file.name, "YYYY-MM-DD"))
+        .map(p => moment(p.file.name, journalFormat))
         .filter(d => d.isValid() && d.isBetween(weekStart, weekEnd, null, "[]"))
         .length
 }
@@ -13,41 +42,33 @@ function weeklyCount(pages, fieldName) {
 function calculateStreak(pages, fieldName) {
     const today = moment().startOf("day")
     
-    // Get all dates where the activity was completed
     const completedDates = pages
         .where(p => p[fieldName] === true)
-        .map(p => moment(p.file.name, "YYYY-MM-DD"))
+        .map(p => moment(p.file.name, journalFormat))
         .filter(d => d.isValid() && d.isSameOrBefore(today))
-        .array() // Convert to plain array
-        .sort((a, b) => b.diff(a)) // Sort descending (most recent first)
+        .array()
+        .sort((a, b) => b.diff(a))
     
     if (completedDates.length === 0) return 0
     
-    // Get the most recent completion date
     const mostRecent = completedDates[0]
-    
-    // If the most recent completion is more than 2 days ago, streak is 0
     const daysSinceLastCompletion = today.diff(mostRecent, 'days')
-    if (daysSinceLastCompletion > 2) {
+    
+    if (daysSinceLastCompletion > MAX_STREAK_GAP) {
         return 0
     }
     
-    // Count total completed dates, checking for gaps of 3+ days
     let streak = 0
     
     for (let i = 0; i < completedDates.length; i++) {
         const currentDate = completedDates[i]
-        
-        // Count this completion
         streak++
         
-        // Check gap to next completion (if there is one)
         if (i < completedDates.length - 1) {
             const nextDate = completedDates[i + 1]
-            const daysBetween = currentDate.diff(nextDate, 'days') - 1 // Gap days between completions
+            const daysBetween = currentDate.diff(nextDate, 'days') - 1
             
-            // If gap is more than 2 days, break the streak
-            if (daysBetween > 2) {
+            if (daysBetween > MAX_STREAK_GAP) {
                 break
             }
         }
@@ -78,7 +99,6 @@ const items = [
     { icon: "🖥️", label: "Journal", pages: '"01 Daily Journal"', field: "DJournal", target: 7 }
 ]
 
-// Calculate progress and streak for each item
 const data = items.map(item => {
     const pages = dv.pages(item.pages)
     const done = weeklyCount(pages, item.field)
@@ -146,27 +166,23 @@ container.appendChild(header)
 const canvas = document.createElement("canvas")
 const ctx = canvas.getContext("2d")
 
-// Get the device pixel ratio for sharp rendering on high-DPI displays
 const dpr = window.devicePixelRatio || 1
-const logicalWidth = 600
-const logicalHeight = 600
+const logicalWidth = CANVAS_SIZE
+const logicalHeight = CANVAS_SIZE
 
-// Set the actual internal resolution (scaled by device pixel ratio)
 canvas.width = logicalWidth * dpr
 canvas.height = logicalHeight * dpr
 
-// Set the display size (logical size)
 canvas.style.width = logicalWidth + "px"
 canvas.style.height = logicalHeight + "px"
 canvas.style.maxWidth = "100%"
 canvas.style.height = "auto"
 
-// Scale the context to account for the higher resolution
 ctx.scale(dpr, dpr)
 
 const centerX = logicalWidth / 2
 const centerY = logicalHeight / 2
-const maxRadius = 220
+const maxRadius = RADAR_MAX_RADIUS
 const numItems = data.length
 
 // Draw background circles
@@ -193,8 +209,8 @@ for (let i = 0; i < numItems; i++) {
 }
 
 // Draw progress polygon
-ctx.fillStyle = "rgba(99, 102, 241, 0.15)"
-ctx.strokeStyle = "rgba(99, 102, 241, 0.8)"
+ctx.fillStyle = COLORS.radarFill
+ctx.strokeStyle = COLORS.radarStroke
 ctx.lineWidth = 2.5
 
 ctx.beginPath()
@@ -221,8 +237,8 @@ for (let i = 0; i < numItems; i++) {
     const x = centerX + Math.cos(angle) * radius
     const y = centerY + Math.sin(angle) * radius
     
-    ctx.fillStyle = data[i].progress >= 1 ? "#10b981" : 
-                    data[i].progress >= 0.7 ? "#f59e0b" : "#ef4444"
+    ctx.fillStyle = data[i].progress >= PROGRESS_THRESHOLDS.complete ? COLORS.complete : 
+                    data[i].progress >= PROGRESS_THRESHOLDS.partial ? COLORS.partial : COLORS.behind
     ctx.beginPath()
     ctx.arc(x, y, 5, 0, Math.PI * 2)
     ctx.fill()
@@ -235,7 +251,7 @@ ctx.textBaseline = "middle"
 
 for (let i = 0; i < numItems; i++) {
     const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
-    const labelRadius = maxRadius + 40
+    const labelRadius = maxRadius + LABEL_OFFSET
     const x = centerX + Math.cos(angle) * labelRadius
     const y = centerY + Math.sin(angle) * labelRadius
     
@@ -244,10 +260,10 @@ for (let i = 0; i < numItems; i++) {
     ctx.fillStyle = "rgba(255, 255, 255, 0.9)"
     ctx.fillText(data[i].icon, x, y - 20)
     
-    // Draw streak (right next to emoji)
+    // Draw streak
     ctx.font = "bold 11px system-ui, -apple-system, sans-serif"
-    const streakColor = data[i].streak >= 7 ? "#10b981" : 
-                        data[i].streak >= 3 ? "#f59e0b" : "#ef4444"
+    const streakColor = data[i].streak >= STREAK_THRESHOLDS.excellent ? COLORS.complete : 
+                        data[i].streak >= STREAK_THRESHOLDS.good ? COLORS.partial : COLORS.behind
     ctx.fillStyle = streakColor
     ctx.fillText(`${data[i].streak}🔥`, x, y - 3)
     
@@ -278,9 +294,9 @@ const legend = dv.el("div", "", {
 })
 
 const legendItems = [
-    { color: "#10b981", label: "Complete" },
-    { color: "#f59e0b", label: "Partial" },
-    { color: "#ef4444", label: "Behind" }
+    { color: COLORS.complete, label: "Complete" },
+    { color: COLORS.partial, label: "Partial" },
+    { color: COLORS.behind, label: "Behind" }
 ]
 
 legendItems.forEach(item => {
