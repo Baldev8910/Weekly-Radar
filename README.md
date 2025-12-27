@@ -18,6 +18,7 @@ In `const items = []`, you can change the following things:
 - `pages` = folder your daily notes are saved in
 - `field` = name of the properties
 - `target` = set target for the week
+- `type` = `"boolean"` for true/false, `"numeric"` for numerical values
 
 You can stack all the activities/properties in a single daily journal too. Like I have for `Medicine`, `Research`, `waterPlants`, `Gaming`, etc.
 
