@@ -10,10 +10,15 @@ A beautiful spider chart to visualize and track your daily habits across the wee
 ## Table of Contents
 
 [Features](#features)
+
 [Requirements](#requirements)
+
 [Installation](#installation)
+
 [Changelog](#changelog)
+
 [Detailed Guide for Tweaking](#detailed-guide-for-tweaking)
+
 [Version](#version)
 
 ---
