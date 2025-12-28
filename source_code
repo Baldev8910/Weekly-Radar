@@ -8,7 +8,7 @@ const LABEL_OFFSET = 40;
 // Streak color thresholds
 const STREAK_THRESHOLDS = {
     excellent: 7,
-    good: 3
+    good: 4
 };
 
 // Progress color thresholds
@@ -39,6 +39,27 @@ function weeklyCount(pages, fieldName, isNumeric = false) {
             value: p[fieldName]
         }))
         .filter(entry => entry.date.isValid() && entry.date.isBetween(weekStart, weekEnd, null, "[]"))
+        .array()
+    
+    if (isNumeric) {
+        return validEntries.reduce((sum, entry) => sum + (Number(entry.value) || 0), 0)
+    } else {
+        return validEntries.filter(entry => entry.value === true).length
+    }
+}
+
+function monthlyCount(pages, fieldName, isNumeric = false) {
+    const today = moment().startOf("day")
+    const monthStart = today.clone().startOf("month")
+    const monthEnd = today.clone().endOf("month")
+
+    const validEntries = pages
+        .where(p => p[fieldName] !== null && p[fieldName] !== undefined)
+        .map(p => ({
+            date: moment(p.file.name, journalFormat),
+            value: p[fieldName]
+        }))
+        .filter(entry => entry.date.isValid() && entry.date.isBetween(monthStart, monthEnd, null, "[]"))
         .array()
     
     if (isNumeric) {
@@ -96,6 +117,7 @@ function calculateStreak(pages, fieldName, isNumeric = false) {
 // ---------- CONFIG ----------
 const today = moment()
 const dayOfWeek = today.isoWeekday()
+let viewMode = 'weekly' // 'weekly' or 'monthly'
 
 const items = [
     { icon: "💪", label: "Workout", pages: '"02 Workout"', field: "Workout", target: 6, type: "boolean" },
@@ -112,22 +134,39 @@ const items = [
     { icon: "🐍", label: "Python", pages: '"04 Learning Python"', field: "Python", target: 6, type: "boolean" },
     { icon: "🏎️", label: "Gaming", pages: '"01 Daily Journal"', field: "Gaming", target: 7, type: "boolean" },
     { icon: "🖥️", label: "Journal", pages: '"01 Daily Journal"', field: "DJournal", target: 7, type: "boolean" },
-    { icon: "💵", label: "Money", pages: '"01 Daily Journal"', field: "moneySpent", target: 1000, type: "numeric" }
+    { icon: "💵", label: "Money Spend", pages: `"01 Daily Journal"`, field: "moneySpent", target: 1000, type: "numeric" },
 ]
 
-const data = items.map(item => {
-    const pages = dv.pages(item.pages)
-    const isNumeric = item.type === "numeric"
-    const done = weeklyCount(pages, item.field, isNumeric)
-    const streak = calculateStreak(pages, item.field, isNumeric)
-    const progress = Math.min(done / item.target, 1)
-    return {
-        ...item,
-        done: isNumeric ? Math.round(done * 10) / 10 : done,
-        streak,
-        progress
-    }
-})
+function calculateData(mode) {
+    const daysInMonth = today.daysInMonth()
+    
+    return items.map(item => {
+        const pages = dv.pages(item.pages)
+        const isNumeric = item.type === "numeric"
+        
+        let done, target
+        if (mode === 'monthly') {
+            done = monthlyCount(pages, item.field, isNumeric)
+            target = Math.round((item.target / 7) * daysInMonth)
+        } else {
+            done = weeklyCount(pages, item.field, isNumeric)
+            target = item.target
+        }
+        
+        const streak = calculateStreak(pages, item.field, isNumeric)
+        const progress = Math.min(done / target, 1)
+        
+        return {
+            ...item,
+            done: isNumeric ? Math.round(done * 10) / 10 : done,
+            target,
+            streak,
+            progress
+        }
+    })
+}
+
+let data = calculateData(viewMode)
 
 // ---------- RENDER ----------
 const container = dv.el("div", "", {
@@ -151,32 +190,30 @@ const header = dv.el("div", "", {
     }
 })
 
-header.appendChild(
-    dv.el("div", "Weekly Radar", {
-        attr: {
-            style: `
-            font-size: 1.3em;
-            font-weight: 300;
-            color: var(--text-muted);
-            letter-spacing: 0.12em;
-            margin-bottom: 4px;
-            `
-        }
-    })
-)
+const headerTitle = dv.el("div", "Weekly Radar", {
+    attr: {
+        style: `
+        font-size: 1.3em;
+        font-weight: 300;
+        color: var(--text-muted);
+        letter-spacing: 0.12em;
+        margin-bottom: 4px;
+        `
+    }
+})
 
-header.appendChild(
-    dv.el("div", `week ${today.isoWeek()}`, {
-        attr: {
-            style: `
-            font-size: 0.8em;
-            color: var(--text-faint);
-            letter-spacing: 0.08em;
-            `
-        }
-    })
-)
+const headerSubtitle = dv.el("div", `week ${today.isoWeek()}`, {
+    attr: {
+        style: `
+        font-size: 0.8em;
+        color: var(--text-faint);
+        letter-spacing: 0.08em;
+        `
+    }
+})
 
+header.appendChild(headerTitle)
+header.appendChild(headerSubtitle)
 container.appendChild(header)
 
 // Canvas for radar chart with high-DPI support
@@ -202,100 +239,236 @@ const centerY = logicalHeight / 2
 const maxRadius = RADAR_MAX_RADIUS
 const numItems = data.length
 
-// Draw background circles
-ctx.strokeStyle = "rgba(128, 128, 128, 0.1)"
-ctx.lineWidth = 1
-for (let i = 1; i <= 5; i++) {
-    ctx.beginPath()
-    ctx.arc(centerX, centerY, (maxRadius / 5) * i, 0, Math.PI * 2)
-    ctx.stroke()
-}
+function drawRadar() {
 
-// Draw axes
-ctx.strokeStyle = "rgba(128, 128, 128, 0.15)"
-ctx.lineWidth = 1
-for (let i = 0; i < numItems; i++) {
-    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
-    const x = centerX + Math.cos(angle) * maxRadius
-    const y = centerY + Math.sin(angle) * maxRadius
+    // Clear canvas
+    ctx.clearRect(0, 0, logicalWidth, logicalHeight)
     
-    ctx.beginPath()
-    ctx.moveTo(centerX, centerY)
-    ctx.lineTo(x, y)
-    ctx.stroke()
-}
-
-// Draw progress polygon
-ctx.fillStyle = COLORS.radarFill
-ctx.strokeStyle = COLORS.radarStroke
-ctx.lineWidth = 2.5
-
-ctx.beginPath()
-for (let i = 0; i < numItems; i++) {
-    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
-    const radius = maxRadius * data[i].progress
-    const x = centerX + Math.cos(angle) * radius
-    const y = centerY + Math.sin(angle) * radius
+    const numItems = data.length
     
-    if (i === 0) {
-        ctx.moveTo(x, y)
-    } else {
+    // Draw background circles
+    ctx.strokeStyle = "rgba(128, 128, 128, 0.1)"
+    ctx.lineWidth = 1
+    for (let i = 1; i <= 5; i++) {
+        ctx.beginPath()
+        ctx.arc(centerX, centerY, (maxRadius / 5) * i, 0, Math.PI * 2)
+        ctx.stroke()
+    }
+
+    // Draw axes
+    ctx.strokeStyle = "rgba(128, 128, 128, 0.15)"
+    ctx.lineWidth = 1
+    for (let i = 0; i < numItems; i++) {
+        const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+        const x = centerX + Math.cos(angle) * maxRadius
+        const y = centerY + Math.sin(angle) * maxRadius
+        
+        ctx.beginPath()
+        ctx.moveTo(centerX, centerY)
         ctx.lineTo(x, y)
+        ctx.stroke()
+    }
+
+    // Draw progress polygon
+    ctx.fillStyle = COLORS.radarFill
+    ctx.strokeStyle = COLORS.radarStroke
+    ctx.lineWidth = 2.5
+
+    ctx.beginPath()
+    for (let i = 0; i < numItems; i++) {
+        const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+        const radius = maxRadius * data[i].progress
+        const x = centerX + Math.cos(angle) * radius
+        const y = centerY + Math.sin(angle) * radius
+        
+        if (i === 0) {
+            ctx.moveTo(x, y)
+        } else {
+            ctx.lineTo(x, y)
+        }
+    }
+    ctx.closePath()
+    ctx.fill()
+    ctx.stroke()
+
+    // Draw points on progress line
+    for (let i = 0; i < numItems; i++) {
+        const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+        const radius = maxRadius * data[i].progress
+        const x = centerX + Math.cos(angle) * radius
+        const y = centerY + Math.sin(angle) * radius
+        
+        ctx.fillStyle = data[i].progress >= PROGRESS_THRESHOLDS.complete ? COLORS.complete : 
+                        data[i].progress >= PROGRESS_THRESHOLDS.partial ? COLORS.partial : COLORS.behind
+        ctx.beginPath()
+        ctx.arc(x, y, 5, 0, Math.PI * 2)
+        ctx.fill()
+    }
+
+    // Draw labels
+    ctx.font = "14px system-ui, -apple-system, sans-serif"
+    ctx.textAlign = "center"
+    ctx.textBaseline = "middle"
+
+    for (let i = 0; i < numItems; i++) {
+        const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+        const labelRadius = maxRadius + LABEL_OFFSET
+        const x = centerX + Math.cos(angle) * labelRadius
+        const y = centerY + Math.sin(angle) * labelRadius
+        
+        // Draw emoji
+        ctx.font = "20px system-ui, -apple-system, sans-serif"
+        ctx.fillStyle = "rgba(255, 255, 255, 0.9)"
+        ctx.fillText(data[i].icon, x, y - 20)
+        
+        // Draw streak
+        ctx.font = "bold 11px system-ui, -apple-system, sans-serif"
+        const streakColor = data[i].streak >= STREAK_THRESHOLDS.excellent ? COLORS.complete : 
+                            data[i].streak >= STREAK_THRESHOLDS.good ? COLORS.partial : COLORS.behind
+        ctx.fillStyle = streakColor
+        ctx.fillText(`${data[i].streak}🔥`, x, y - 3)
+        
+        // Draw label
+        ctx.font = "11px system-ui, -apple-system, sans-serif"
+        ctx.fillStyle = "rgba(150, 150, 150, 0.8)"
+        ctx.fillText(data[i].label, x, y + 11)
+        
+        // Draw progress fraction
+        ctx.font = "10px system-ui, -apple-system, sans-serif"
+        ctx.fillStyle = "rgba(120, 120, 120, 0.7)"
+        ctx.fillText(`${data[i].done}/${data[i].target}`, x, y + 24)
     }
 }
-ctx.closePath()
-ctx.fill()
-ctx.stroke()
 
-// Draw points on progress line
-for (let i = 0; i < numItems; i++) {
-    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
-    const radius = maxRadius * data[i].progress
-    const x = centerX + Math.cos(angle) * radius
-    const y = centerY + Math.sin(angle) * radius
-    
-    ctx.fillStyle = data[i].progress >= PROGRESS_THRESHOLDS.complete ? COLORS.complete : 
-                    data[i].progress >= PROGRESS_THRESHOLDS.partial ? COLORS.partial : COLORS.behind
-    ctx.beginPath()
-    ctx.arc(x, y, 5, 0, Math.PI * 2)
-    ctx.fill()
-}
-
-// Draw labels
-ctx.font = "14px system-ui, -apple-system, sans-serif"
-ctx.textAlign = "center"
-ctx.textBaseline = "middle"
-
-for (let i = 0; i < numItems; i++) {
-    const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
-    const labelRadius = maxRadius + LABEL_OFFSET
-    const x = centerX + Math.cos(angle) * labelRadius
-    const y = centerY + Math.sin(angle) * labelRadius
-    
-    // Draw emoji
-    ctx.font = "20px system-ui, -apple-system, sans-serif"
-    ctx.fillStyle = "rgba(255, 255, 255, 0.9)"
-    ctx.fillText(data[i].icon, x, y - 20)
-    
-    // Draw streak
-    ctx.font = "bold 11px system-ui, -apple-system, sans-serif"
-    const streakColor = data[i].streak >= STREAK_THRESHOLDS.excellent ? COLORS.complete : 
-                        data[i].streak >= STREAK_THRESHOLDS.good ? COLORS.partial : COLORS.behind
-    ctx.fillStyle = streakColor
-    ctx.fillText(`${data[i].streak}🔥`, x, y - 3)
-    
-    // Draw label
-    ctx.font = "11px system-ui, -apple-system, sans-serif"
-    ctx.fillStyle = "rgba(150, 150, 150, 0.8)"
-    ctx.fillText(data[i].label, x, y + 11)
-    
-    // Draw progress fraction
-    ctx.font = "10px system-ui, -apple-system, sans-serif"
-    ctx.fillStyle = "rgba(120, 120, 120, 0.7)"
-    ctx.fillText(`${data[i].done}/${data[i].target}`, x, y + 24)
-}
+// Initial draw
+drawRadar()
 
 container.appendChild(canvas)
+
+// Tooltip element
+const tooltip = document.createElement("div")
+tooltip.style.cssText = `
+    position: absolute;
+    background: none;
+    color: white;
+    padding: 12px 16px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+    z-index: 1000;
+    -webkit-font-smoothing: antialiased;
+`
+document.body.appendChild(tooltip)
+
+// Add hover detection to canvas
+canvas.style.cursor = "pointer"
+canvas.addEventListener("mousemove", (e) => {
+    const rect = canvas.getBoundingClientRect()
+    const mouseX = e.clientX - rect.left
+    const mouseY = e.clientY - rect.top
+    
+    let hoveredItem = null
+    let hoveredIndex = -1
+    
+    // Check which label is being hovered
+    for (let i = 0; i < numItems; i++) {
+        const angle = (Math.PI * 2 * i) / numItems - Math.PI / 2
+        const labelRadius = maxRadius + LABEL_OFFSET
+        const x = centerX + Math.cos(angle) * labelRadius
+        const y = centerY + Math.sin(angle) * labelRadius
+        
+        const distance = Math.sqrt((mouseX - x) ** 2 + (mouseY - y) ** 2)
+        if (distance < 30) {
+            hoveredItem = data[i]
+            hoveredIndex = i
+            break
+        }
+    }
+    
+if (hoveredItem) {
+    const pages = dv.pages(hoveredItem.pages)
+    
+    if (viewMode === 'weekly') {
+        // Weekly view - show M T W T F S S
+        const days = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+        const weekStart = today.clone().startOf("isoWeek")
+        
+        let weekHTML = '<div style="display: flex; gap: 6px;">'
+        for (let i = 0; i < 7; i++) {
+            const day = weekStart.clone().add(i, 'days')
+            const dayPage = pages.find(p => moment(p.file.name, journalFormat).isSame(day, 'day'))
+            const completed = dayPage && (hoveredItem.type === "numeric" ? 
+                (dayPage[hoveredItem.field] > 0) : 
+                (dayPage[hoveredItem.field] === true))
+            
+            const isFuture = day.isAfter(today, 'day')
+			const color = isFuture ? 'transparent' : (completed ? '#10b981' : '#ef4444')
+            weekHTML += `<div style="width: 26px; height: 26px; background: ${color}; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 400; line-height: 1;">${days[i]}</div>`
+        }
+        weekHTML += '</div>'
+        
+        tooltip.innerHTML = weekHTML
+    } else {
+        // Monthly view - show calendar grid
+        const monthStart = today.clone().startOf('month')
+        const monthEnd = today.clone().endOf('month')
+        const firstDayOfWeek = monthStart.isoWeekday() // 1 = Monday, 7 = Sunday
+        const daysInMonth = today.daysInMonth()
+        
+        // Build calendar HTML
+        let calendarHTML = '<div style="background: none; padding: 8px; border-radius: 8px;">'
+        
+        // Header with day names
+        calendarHTML += '<div style="display: grid; grid-template-columns: repeat(7, 24px); gap: 3px; margin-bottom: 4px;">'
+        const dayNames = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+        dayNames.forEach(day => {
+            calendarHTML += `<div style="text-align: center; font-size: 10px; color: var(--text-muted); font-weight: 600;">${day}</div>`
+        })
+        calendarHTML += '</div>'
+        
+        // Calendar grid
+        calendarHTML += '<div style="display: grid; grid-template-columns: repeat(7, 24px); gap: 3px;">'
+        
+        // Empty cells before first day
+        for (let i = 1; i < firstDayOfWeek; i++) {
+            calendarHTML += '<div style="width: 24px; height: 24px;"></div>'
+        }
+        
+        // Days of the month
+        for (let day = 1; day <= daysInMonth; day++) {
+            const date = monthStart.clone().date(day)
+            const dayPage = pages.find(p => moment(p.file.name, journalFormat).isSame(date, 'day'))
+            const completed = dayPage && (hoveredItem.type === "numeric" ? 
+                (dayPage[hoveredItem.field] > 0) : 
+                (dayPage[hoveredItem.field] === true))
+            
+            const isFuture = date.isAfter(today, 'day')
+			const color = isFuture ? 'transparent' : (completed ? '#10b981' : '#ef4444')
+			const isToday = date.isSame(today, 'day')
+			const borderStyle = isToday ? 'border: 2px solid rgba(99, 102, 241, 0.8);' : ''
+			
+			calendarHTML += `<div style="width: 24px; height: 24px; background: ${color}; ${isFuture ? 'border: 1px solid rgba(128, 128, 128, 0.2);' : ''} border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; color: ${isFuture ? 'var(--text-faint)' : 'white'}; ${borderStyle}">${day}</div>`
+        }
+        
+        calendarHTML += '</div></div>'
+        
+        tooltip.innerHTML = calendarHTML
+    }
+    
+    tooltip.style.left = e.clientX + 10 + 'px'
+    tooltip.style.top = e.clientY - 20 + 'px'
+    tooltip.style.opacity = '1'
+} else {
+    tooltip.style.opacity = '0'
+}
+})
+
+canvas.addEventListener("mouseleave", () => {
+    tooltip.style.opacity = '0'
+})
 
 // Legend
 const legend = dv.el("div", "", {
@@ -353,4 +526,122 @@ legendItems.forEach(item => {
     legend.appendChild(legendItem)
 })
 
-container.appendChild(legend)
+// Wrapper for legend and toggle
+const legendWrapper = dv.el("div", "", {
+    attr: {
+        style: `
+        position: relative;
+        margin-top: 30px;
+        width: 100%;
+        display: flex;
+        justify-content: center;
+        `
+    }
+})
+
+legendWrapper.appendChild(legend)
+container.appendChild(legendWrapper)
+
+// iOS Toggle Switch
+const toggleContainer = dv.el("div", "", {
+    attr: {
+        style: `
+        position: absolute;
+        right: 0;
+        top: 50%;
+        transform: translateY(-25%);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        `
+    }
+})
+
+const toggleSwitch = document.createElement("div")
+toggleSwitch.style.cssText = `
+    width: 55px;
+    height: 33px;
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 31px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.3s;
+`
+
+const toggleKnob = document.createElement("div")
+toggleKnob.style.cssText = `
+    width: 27px;
+    height: 27px;
+    background: white;
+    border-radius: 50%;
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    transition: left 0.3s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+`
+
+toggleSwitch.appendChild(toggleKnob)
+
+const labelW = document.createElement("span")
+labelW.style.cssText = `
+    position: absolute;
+    left: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 1;
+    -webkit-font-smoothing: antialiased;
+`
+labelW.textContent = "W"
+
+const labelM = document.createElement("span")
+labelM.style.cssText = `
+    position: absolute;
+    right: 11px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-muted);
+    pointer-events: none;
+    z-index: 1;
+    -webkit-font-smoothing: antialiased;
+`
+labelM.textContent = "M"
+
+toggleSwitch.appendChild(labelW)
+toggleSwitch.appendChild(labelM)
+
+toggleSwitch.addEventListener("click", () => {
+    viewMode = viewMode === 'weekly' ? 'monthly' : 'weekly'
+    
+    // Update toggle appearance
+    if (viewMode === 'monthly') {
+	    toggleSwitch.style.background = 'rgba(99, 102, 241, 0.4)'
+	    toggleSwitch.style.borderColor = 'rgba(99, 102, 241, 0.8)'
+		    toggleKnob.style.left = '25px'
+	} else {
+	    toggleSwitch.style.background = 'rgba(255, 255, 255, 0.05)'
+	    toggleSwitch.style.borderColor = 'rgba(255, 255, 255, 0.1)'
+	    toggleKnob.style.left = '1px'
+	}
+    
+    // Update header
+    headerTitle.textContent = viewMode === 'weekly' ? 'Weekly Radar' : 'Monthly Radar'
+    headerSubtitle.textContent = viewMode === 'weekly' ? 
+        `week ${today.isoWeek()}` : 
+        today.format('MMMM YYYY')
+    
+    // Recalculate data and redraw
+    data = calculateData(viewMode)
+    drawRadar()
+})
+
+toggleContainer.appendChild(toggleSwitch)
+legendWrapper.appendChild(toggleContainer)
