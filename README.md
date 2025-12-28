@@ -5,6 +5,19 @@
 
 A beautiful spider chart to visualize and track your daily habits across the week (Monday to Sunday). Monitor your progress, maintain streaks, and see your completion patterns at a glance with interactive hover tooltips.
 
+---
+
+## Table of Contents
+
+[Features](#features)
+[Requirements](#requirements)
+[Installation](#installation)
+[Changelog](#changelog)
+[Detailed Guide for Tweaking](#detailed-guide-for-tweaking)
+[Version](#version)
+
+---
+
 ## Features
 
 - **Visual Progress Tracking** - Spider chart shows weekly/monthly completion at a glance.
@@ -16,9 +29,13 @@ A beautiful spider chart to visualize and track your daily habits across the wee
 - **Boolean & Numeric Support** - Track yes/no habits or numerical values.
 - **Smart Future Handling** - Future dates show as transparent, not incomplete.
 
+---
+
 ## Requirements
 
 **Dataview** plugin is required to run this code in Obsidian.
+
+---
 
 ## Installation
 
@@ -77,12 +94,14 @@ const items = [
 - Adjust colors in `const COLORS = { ... }`
 - Modify thresholds in `STREAK_THRESHOLDS` and `PROGRESS_THRESHOLDS`
 
-### Step 5: Use It!
+### Step 5: Use It
 
 - View your weekly progress at a glance
 - Hover over activities to see daily/monthly completion
 - Toggle between weekly (W) and monthly (M) views
 - Watch your streaks grow
+
+---
 
 ## Changelog
 
@@ -121,6 +140,8 @@ Other global values can also be changed, like `MAX_STREAK_GAP` for maximum gap a
 ### 1.1.1
 
 You can now set a global `journalFormat` as per your preference. It can be `YYYY-MM-DD` (which is the default) or `DD-MM-YY` as some people might prefer to store their notes.
+
+---
 
 ## Detailed Guide for Tweaking
 
@@ -404,6 +425,8 @@ const COLORS = {
 3. To change color scheme: Modify the COLORS object at the top of the file.
 4. To adjust tooltip size: Change width, height, font-size in respective tooltip sections.
 5. To make calendar bigger: Increase grid-template-columns values and cell width/height proportionally.
+
+---
 
 ## Version
 
