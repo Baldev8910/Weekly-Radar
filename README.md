@@ -9,7 +9,7 @@ You need to have folders for each activities you want to track. For example, "01
 
 Then create the properties for the activities you want to track and mention the folder your daily notes are stored in. The properties should be in the checkbox style only.
 
-You can customize the way you name your daily journals, by default it is `YYYY-MM-DD`.
+You can customize the way you name your daily journals, by default it is `YYYY-MM-DD`. The code will also accept complicated note names like `DD, dddd, MMM, YYYY`.
 
 In `const items = []`, you can change the following things:
 
